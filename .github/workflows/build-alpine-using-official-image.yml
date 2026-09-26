@@ -1,0 +1,123 @@
+#==========================================================================
+# Description: Build Alpine Linux images for target boards.
+# Pipeline: build an Alpine base rootfs (minirootfs + apk) as ext4 img,
+#           then reuse ophub's rebuild to assemble board kernel/u-boot/bootfs.
+# Copyright (C) 2026 yzxiu
+#==========================================================================
+
+name: Build Alpine images
+
+on:
+  workflow_dispatch:
+    inputs:
+      armbian_board:
+        description: "Select device board."
+        required: true
+        default: "lubancat-1"
+        type: string
+      armbian_kernel:
+        description: "Select kernel version."
+        required: false
+        default: "6.12.y_6.18.y"
+        type: choice
+        options:
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+          - 6.1.y_6.12.y
+          - 6.12.y_6.18.y
+      auto_kernel:
+        description: "Auto use the latest kernel."
+        required: false
+        default: true
+        type: boolean
+      kernel_repo:
+        description: "Set the kernel repository."
+        required: false
+        default: "ophub/kernel"
+        type: choice
+        options:
+          - ophub/kernel
+      kernel_usage:
+        description: "Set the tags of the stable kernel."
+        required: false
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - flippy
+          - beta
+      rootfs_size:
+        description: "Alpine rootfs size in MiB."
+        required: false
+        default: "2048"
+
+env:
+  TZ: Etc/UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04-arm
+    if: ${{ github.event.repository.owner.id == github.event.sender.id }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize the build environment
+        id: init
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install mkfs.ext4 ext4progs mount util-linux losetup parted xz-utils gzip pigz jq curl git e2fsprogs
+          sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
+
+      - name: Build Alpine base rootfs image
+        id: alpine
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          # aarch64 on ARM runner
+          arch="aarch64"
+          kernel_tag="6.18"
+          board="${{ inputs.armbian_board }}"
+          # Pick a base image filename matching rebuild's *-trunk_* convention
+          # so `uses: ./` (local action) accepts it unchanged.
+          mkdir -p build/output/images
+          out="build/output/images/Armbian_26.8.1-trunk_alpine_arm64_${kernel_tag}.img"
+          sudo bash ./build-alpine-rootfs.sh "${arch}" "${out}" "${{ inputs.rootfs_size }}"
+
+      - name: Rebuild Alpine for target boards (local action)
+        uses: ./
+        with:
+          build_target: armbian
+          armbian_path: build/output/images/Armbian_26.8.1-trunk_alpine_arm64_6.18.img
+          armbian_board: ${{ inputs.armbian_board }}
+          armbian_kernel: ${{ inputs.armbian_kernel }}
+          auto_kernel: ${{ inputs.auto_kernel }}
+          kernel_repo: ${{ inputs.kernel_repo }}
+          kernel_usage: ${{ inputs.kernel_usage }}
+          armbian_fstype: ext4
+          builder_name: ophub
+
+      - name: Upload Alpine images to Release
+        uses: ophub/upload-to-releases@main
+        if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
+        with:
+          tag: Alpine_${{ inputs.armbian_board }}_${{ github.run_number }}
+          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
+          allow_updates: true
+          remove_artifacts: false
+          replaces_artifacts: true
+          make_latest: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ### Alpine Image Information
+            - Default root password: `alpine`
+            - Base: Alpine Linux v3.22 aarch64
+            - Board: ${{ inputs.armbian_board }}
+            - Built from local fork `rebuild`
