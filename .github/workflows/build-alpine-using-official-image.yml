@@ -73,7 +73,8 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get -y update
-          sudo apt-get -y install mkfs.ext4 ext4progs mount util-linux losetup parted xz-utils gzip pigz jq curl git e2fsprogs
+          sudo apt-get -y install e2fsprogs util-linux parted xz-utils gzip pigz jq curl git
+          # mkfs.ext4 comes from e2fsprogs, losetup from util-linux — both above
           sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
 
       - name: Build Alpine base rootfs image
