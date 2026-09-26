@@ -1,0 +1,9 @@
+[Unit]
+Description=LubanCat-1 fan thermal check (one-shot; triggered by fan-thermal.timer)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/fan-thermal
+StandardOutput=journal
+StandardError=journal

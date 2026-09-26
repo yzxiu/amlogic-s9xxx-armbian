@@ -1,0 +1,48 @@
+#!/bin/sh
+# LubanCat-1 风扇温控检查（一次性；由 fan-thermal.timer 每 3s 触发）
+#   曲线:  >=60C -> 100%   >=50C -> 75%   <=40C -> 停
+#   滞回:  停->起转 需 >=50C;  转->停 需 <=40C;  100%->75% 需 <=58C
+# PWM0_M0 = GPIO0_B7 (25kHz), 由 lubancat-fan-pwm overlay 使能 pwm0。
+PWMDIR=""
+for c in /sys/class/pwm/pwmchip*; do
+	[ -e "$c" ] || continue
+	readlink "$c" 2>/dev/null | grep -q fdd70000 && PWMDIR="$c"
+done
+if [ -z "$PWMDIR" ]; then
+	logger -t fan-thermal "ERROR: no pwm0 controller (fdd70000.pwm); overlay not active?"
+	exit 1
+fi
+CH="$PWMDIR/pwm0"
+ZONE=/sys/class/thermal/thermal_zone0/temp      # cpu-thermal, 毫摄氏度
+STATE=/tmp/fan-thermal.state
+
+# 从硬件回读真实档位 (0=停, 1=75%, 2=100%)
+read_level() {
+	[ -e "$CH/enable" ] || { echo -1; return; }
+	[ "$(cat "$CH/enable" 2>/dev/null)" = "1" ] || { echo 0; return; }
+	if [ "$(cat "$CH/duty_cycle" 2>/dev/null)" -ge 40000 ] 2>/dev/null; then echo 2; else echo 1; fi
+}
+apply() {
+	case "$1" in
+		0) /usr/bin/fan off >/dev/null 2>&1 ;;
+		1) /usr/bin/fan 75  >/dev/null 2>&1 ;;
+		2) /usr/bin/fan max >/dev/null 2>&1 ;;
+	esac
+}
+
+raw="$(cat "$ZONE" 2>/dev/null)"
+[ -n "$raw" ] || exit 0
+t=$((raw / 1000))
+level=$(read_level)
+if   [ "$t" -ge 60 ]; then n=2
+elif [ "$level" -eq 2 ] && [ "$t" -ge 59 ]; then n=2
+elif [ "$t" -ge 50 ]; then n=1
+elif [ "$level" -ne 0 ] && [ "$t" -ge 41 ]; then n=1
+else n=0
+fi
+if [ "$n" != "$level" ]; then
+	apply "$n"
+	logger -t fan-thermal "temp=${t}C level ${level} -> ${n}"
+fi
+echo "${t} ${n}" > "$STATE" 2>/dev/null
+exit 0

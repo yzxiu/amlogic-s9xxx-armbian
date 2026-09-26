@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * LubanCat-1 (RK3566, 野火) —— 风扇硬件 PWM 调速
+ *
+ * 本文件与 lubancat-msata-overlay.dts 完全独立：
+ *   lubancat-msata    : pcie2x1 / sata2 / vcc3v3_pcie / sdmmc0
+ *   lubancat-fan-pwm  : pwm0                     ← 本文件
+ * 两者互不引用，可分别启用/停用。
+ *
+ * ── 为什么一行就够 ─────────────────────────────────────────────────
+ * GPIO0_B7 在 RK3566 上只有两个 mux 选项（主线 rk3568-pinctrl.dtsi）：
+ *     cpu_pins:     0 RK_PB7 2    func2 = cpu_avs，本板未启用
+ *     pwm0m0_pins:  0 RK_PB7 1    func1 = pwm0_m0   <- 我们要的
+ * 而主线 rk356x-base.dtsi 里 pwm0 的 pinctrl-0 已经默认就是 <&pwm0m0_pins>：
+ *     pwm0: pwm@fdd70000 {
+ *             pinctrl-0 = <&pwm0m0_pins>;      <- 基础 dtb 实测 phandle=39
+ *             #pwm-cells = <3>;
+ *             status = "disabled";              <- 唯一的障碍
+ *     };
+ * 所以只需把 status 改成 okay —— 不用写 pinctrl，也不用 mux。
+ *
+ * 绑定的驱动：主线 drivers/pwm/pwm-rockchip.c（DT 的 fallback compatible
+ * "rockchip,rk3328-pwm" 命中它；内核里没有 rockchip,rk3568-pwm 的驱动表项，
+ * pwm-rockchip-v4 只匹配 rockchip,rk3576-pwm）。CONFIG_PWM_ROCKCHIP=y 内置，无需模块。
+ * 该控制器是单通道 → 出现 /sys/class/pwm/pwmchipN/pwm0/。
+ *
+ * ⚠️ 与"把 PB7 当普通 GPIO"的方案**互斥**（同一个脚只能选一种 mux）：
+ *    - 不要再往任何 overlay 里加 gpio-leds / gpio-fan 的 fan 节点
+ *    - 板上必须 unexport gpio527，并删掉所有自动 export 的脚本（rc.local/profile/crontab）
+ *      否则 pwm0 抢不到 pin15 的 mux，pwmchip 不会出现。
+ *
+ * ⚠️ 另注意：overlay 只让 pwmchip 出现。PWM 通道的 export/period/duty/enable
+ *    全是**运行时状态，重启即丢** —— 真正的调速由用户态守护 /usr/bin/fan-thermal
+ *    负责（procd 服务 /etc/init.d/fan-thermal，S99 自启）：每 3s 读 cpu-thermal，
+ *    按 ≤40℃ 停 / ≥50℃ 75% / ≥60℃ 100%（10℃ 滞回）写 sysfs。
+ *    守护脚本与 overlay 一起随镜像预置，见
+ *    make-openwrt/openwrt-files/different-files/lubancat-1/rootfs/ 及 remake 的 refactor_bootfs()。
+ */
+
+/dts-v1/;
+/plugin/;
+
+&pwm0 {
+	status = "okay";
+};

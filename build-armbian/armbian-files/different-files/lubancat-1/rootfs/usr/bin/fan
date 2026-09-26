@@ -1,0 +1,29 @@
+#!/bin/sh
+# LubanCat-1 风扇 PWM 控制 (pwm0_m0 / GPIO0_B7), 25kHz, normal polarity
+#   fan         看状态
+#   fan 70      设 70% (= 高电平占空比)
+#   fan max     100%
+#   fan off     停
+FANCH=""
+for c in /sys/class/pwm/pwmchip*; do
+	[ -e "$c" ] || continue
+	readlink "$c" 2>/dev/null | grep -q fdd70000 && FANCH="$c"
+done
+[ -n "$FANCH" ] || { echo "错误: 找不到 pwm0 控制器 (fdd70000.pwm) —— overlay 没生效?"; exit 1; }
+P0="$FANCH/pwm0"
+[ -d "$P0" ] || echo 0 > "$FANCH/export"
+# period / polarity 只有在 disable 状态才能改，且必须保证 polarity=normal
+# (RK PWM 复位后硬件 PWM_DUTY_POSITIVE=0，驱动会报 inversed，含义会反过来)
+if [ "$(cat "$P0/period" 2>/dev/null)" != 40000 ] || [ "$(cat "$P0/polarity" 2>/dev/null)" != normal ]; then
+	echo 0 > "$P0/enable"; echo 0 > "$P0/duty_cycle"
+	echo 40000 > "$P0/period"; echo normal > "$P0/polarity"
+fi
+case "$1" in
+	"")    echo "duty=$(cat $P0/duty_cycle)ns  period=$(cat $P0/period)ns  enable=$(cat $P0/enable)  polarity=$(cat $P0/polarity)" ;;
+	off)   echo 0 > "$P0/enable"; echo "fan OFF" ;;
+	max)   echo 1 > "$P0/enable"; echo 40000 > "$P0/duty_cycle"; echo "fan 100%" ;;
+	*)     P="$1"
+	       case "$P" in *[!0-9]*) echo "用法: fan [0-100] | off | max"; exit 1 ;; esac
+	       [ "$P" -ge 0 ] && [ "$P" -le 100 ] || { echo "用法: fan [0-100] | off | max"; exit 1; }
+	       echo 1 > "$P0/enable"; echo $((P*400)) > "$P0/duty_cycle"; echo "fan $P%" ;;
+esac
