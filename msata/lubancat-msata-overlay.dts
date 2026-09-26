@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * LubanCat-1 (RK3566, 野火) —— mini-PCIe 口复用为 mSATA
+ *
+ * A. 关 pcie2x1、开 sata2        —— 让 mSATA 出 /dev/sda（combphy2 换模式）
+ * B. vcc3v3_pcie 强制常开        —— 关掉 pcie2x1 后给 mSATA 槽供电
+ * C. sdmmc0 限速 50MHz           —— 保系统盘（TF 卡）能起来
+ */
+
+/dts-v1/;
+/plugin/;
+
+/* ---------- A. combphy2：PCIE → SATA ---------- */
+&pcie2x1 {
+	status = "disabled";
+};
+
+&sata2 {
+	status = "okay";
+	vpcie3v3-supply = <&vcc3v3_pcie>;	/* 主线 AHCI 会忽略，仅为与野火官方 overlay 对齐 */
+};
+
+/* ---------- B. mini-PCIe/mSATA 槽 3.3V 常开 ---------- */
+&vcc3v3_pcie {
+	regulator-always-on;
+};
+
+/* ---------- C. 系统盘 TF 卡：限制在 50MHz ---------- */
+&sdmmc0 {
+	max-frequency = <50000000>;	/* 150MHz SDR104 实测 All phases bad */
+	no-1-8-v;			/* 注意：本属性在本板无效，见 §8 */
+};

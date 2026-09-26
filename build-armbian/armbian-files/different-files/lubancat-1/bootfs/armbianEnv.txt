@@ -14,4 +14,4 @@ extraargs=rw rootwait
 extraboardargs=net.ifnames=0
 overlay_prefix=rk3568
 overlays=
-user_overlays=
+user_overlays=lubancat-msata
