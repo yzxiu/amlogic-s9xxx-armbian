@@ -78,12 +78,15 @@ chroot "${WORK}/root" /bin/sh -c "
 " 2>&1 | tail -20 || true
 
 echo "=== [2/5] Pre-stamp rebuild compatibility files ==="
-# os-release: ID=alpine + VERSION_CODENAME (required by rebuild extract_armbian)
+# os-release: ID=alpine + VERSION_CODENAME (required by rebuild extract_armbian).
+# VERSION_CODENAME is baked into the output image filename by make_image
+# (Armbian_<ver>_rockchip_<board>_<codename>_<kernel>_server_<date>.img), so
+# use "alpine" to make the distro explicit in the artifact name.
 cat > "${WORK}/root/etc/os-release" <<EOF
 NAME="Alpine Linux"
 ID=alpine
 VERSION_ID=${ALPINE_VER}
-VERSION_CODENAME=${ALPINE_VER%.*}
+VERSION_CODENAME=alpine
 PRETTY_NAME="Alpine Linux v${ALPINE_VER}"
 HOME_URL="https://alpinelinux.org/"
 EOF
