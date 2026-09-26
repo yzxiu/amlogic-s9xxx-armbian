@@ -422,7 +422,8 @@ jobs:
           ln -sf /builder/build /home/runner/work/_actions/ophub/amlogic-s9xxx-armbian/main/build
 
           sudo timedatectl set-timezone "${TZ}"
-          echo "build_tag=Armbian${set_release}_arm64_${{ inputs.armbian_edition }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
+          echo "build_tag=Armbian${set_release}_arm64_${{ inputs.armbian_edition }}_$(date +"%Y.%m.%d_%H.%M.%S")" >> ${GITHUB_ENV}
+          echo "release_name=Armbian ${{ inputs.armbian_board }}${set_release} ${{ inputs.armbian_edition }} $(date +"%Y.%m.%d %H:%M:%S")" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Rebuild Armbian for target boards
@@ -444,6 +445,7 @@ jobs:
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
           tag: ${{ env.build_tag }}
+          name: ${{ env.release_name }}
           artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
           allow_updates: true
           remove_artifacts: false
