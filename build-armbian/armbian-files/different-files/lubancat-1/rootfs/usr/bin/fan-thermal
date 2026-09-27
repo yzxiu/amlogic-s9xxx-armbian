@@ -1,8 +1,9 @@
 #!/bin/sh
-# LubanCat-1 风扇温控检查（一次性；由 fan-thermal.timer 每 3s 触发）
+# LubanCat-1 风扇温控守护（常驻 daemon；由 fan-thermal.service 启动，每 3s 检查一次）
 #   曲线:  >=60C -> 100%   >=50C -> 75%   <=40C -> 停
 #   滞回:  停->起转 需 >=50C;  转->停 需 <=40C;  100%->75% 需 <=58C
 # PWM0_M0 = GPIO0_B7 (25kHz), 由 lubancat-fan-pwm overlay 使能 pwm0。
+# 常驻 while 循环替代 systemd timer，避免 timer 在 oneshot 失败/时钟异常时停止调度。
 PWMDIR=""
 for c in /sys/class/pwm/pwmchip*; do
 	[ -e "$c" ] || continue
@@ -30,19 +31,25 @@ apply() {
 	esac
 }
 
-raw="$(cat "$ZONE" 2>/dev/null)"
-[ -n "$raw" ] || exit 0
-t=$((raw / 1000))
-level=$(read_level)
-if   [ "$t" -ge 60 ]; then n=2
-elif [ "$level" -eq 2 ] && [ "$t" -ge 59 ]; then n=2
-elif [ "$t" -ge 50 ]; then n=1
-elif [ "$level" -ne 0 ] && [ "$t" -ge 41 ]; then n=1
-else n=0
-fi
-if [ "$n" != "$level" ]; then
-	apply "$n"
-	logger -t fan-thermal "temp=${t}C level ${level} -> ${n}"
-fi
-echo "${t} ${n}" > "$STATE" 2>/dev/null
-exit 0
+while :; do
+	# 每次循环确保 pwm0 已 export（/usr/bin/fan 内部也会做，此处双保险）
+	[ -d "$CH" ] || echo 0 > "$PWMDIR/export" 2>/dev/null
+
+	raw="$(cat "$ZONE" 2>/dev/null)"
+	if [ -n "$raw" ]; then
+		t=$((raw / 1000))
+		level=$(read_level)
+		if   [ "$t" -ge 60 ]; then n=2
+		elif [ "$level" -eq 2 ] && [ "$t" -ge 59 ]; then n=2
+		elif [ "$t" -ge 50 ]; then n=1
+		elif [ "$level" -ne 0 ] && [ "$t" -ge 41 ]; then n=1
+		else n=0
+		fi
+		if [ "$n" != "$level" ]; then
+			apply "$n"
+			logger -t fan-thermal "temp=${t}C level ${level} -> ${n}"
+		fi
+		echo "${t} ${n}" > "$STATE" 2>/dev/null
+	fi
+	sleep 3
+done

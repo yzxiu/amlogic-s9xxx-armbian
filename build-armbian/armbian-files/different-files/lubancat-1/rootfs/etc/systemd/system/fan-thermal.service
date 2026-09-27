@@ -1,9 +1,15 @@
 [Unit]
-Description=LubanCat-1 fan thermal check (one-shot; triggered by fan-thermal.timer)
-After=local-fs.target
+Description=LubanCat-1 fan thermal control daemon (resident, 3s poll)
+After=local-fs.target sys-class-pwm.device
+Wants=sys-class-pwm.device
 
 [Service]
-Type=oneshot
+Type=simple
 ExecStart=/usr/bin/fan-thermal
+Restart=always
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
