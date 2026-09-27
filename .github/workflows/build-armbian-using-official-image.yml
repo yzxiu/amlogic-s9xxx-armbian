@@ -393,7 +393,7 @@ jobs:
         working-directory: /builder
         run: |
           # Resolve the Armbian image download URL
-          armbian_url="${{ inputs.armbian_url || "https://armbian.tnahosting.net/dl/odroidn2/archive/Armbian_26.8.1_Odroidn2_resolute_current_6.18.43_minimal.img.xz" }}"
+          armbian_url="${{ inputs.armbian_url || 'https://armbian.tnahosting.net/dl/odroidn2/archive/Armbian_26.8.1_Odroidn2_resolute_current_6.18.43_minimal.img.xz' }}"
           if  [[ -z "${armbian_url}" ]]; then
               armbian_site="https://armbian.tnahosting.net/dl/odroidn2/archive/"
               armbian_name="Armbian.*noble.*.img.xz"
@@ -423,8 +423,8 @@ jobs:
           ln -sf /builder/build ${{ github.workspace }}/build
 
           sudo timedatectl set-timezone "${TZ}"
-          echo "build_tag=Armbian${set_release}_arm64_${{ inputs.armbian_edition || "server" }}_$(date +"%Y.%m.%d_%H.%M.%S")" >> ${GITHUB_ENV}
-          echo "release_name=Armbian ${{ inputs.armbian_board || "lubancat-1" }}${set_release} ${{ inputs.armbian_edition || "server" }} $(date +"%Y.%m.%d %H:%M:%S")" >> ${GITHUB_ENV}
+          echo "build_tag=Armbian${set_release}_arm64_${{ inputs.armbian_edition || 'server' }}_$(date +"%Y.%m.%d_%H.%M.%S")" >> ${GITHUB_ENV}
+          echo "release_name=Armbian ${{ inputs.armbian_board || 'lubancat-1' }}${set_release} ${{ inputs.armbian_edition || 'server' }} $(date +"%Y.%m.%d %H:%M:%S")" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Rebuild Armbian for target boards
@@ -433,13 +433,13 @@ jobs:
         with:
           build_target: armbian
           armbian_path: ${{ env.ARMBIAN_URL }}
-          armbian_board: ${{ inputs.armbian_board || "lubancat-1" }}
-          armbian_kernel: ${{ inputs.armbian_kernel || "6.12.y_6.18.y" }}
+          armbian_board: ${{ inputs.armbian_board || 'lubancat-1' }}
+          armbian_kernel: ${{ inputs.armbian_kernel || '6.12.y_6.18.y' }}
           auto_kernel: ${{ inputs.auto_kernel || true }}
-          kernel_repo: ${{ inputs.kernel_repo || "ophub/kernel" }}
-          kernel_usage: ${{ inputs.kernel_usage || "stable" }}
-          armbian_fstype: ${{ inputs.armbian_fstype || "ext4" }}
-          builder_name: ${{ inputs.builder_name || "ophub" }}
+          kernel_repo: ${{ inputs.kernel_repo || 'ophub/kernel' }}
+          kernel_usage: ${{ inputs.kernel_usage || 'stable' }}
+          armbian_fstype: ${{ inputs.armbian_fstype || 'ext4' }}
+          builder_name: ${{ inputs.builder_name || 'ophub' }}
 
       - name: Upload Armbian images to Release
         uses: ophub/upload-to-releases@main
